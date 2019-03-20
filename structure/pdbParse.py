@@ -1,7 +1,6 @@
-#!/usr/bin/env python2
-from __future__ import with_statement
+#!/usr/bin/env python
 from scipy import io, empty, array, rec, dtype
-import sys, os, cPickle
+import sys, os, pickle
 
 """
 ATOM      8  C  BASP A   2      76.283  57.361  60.309  0.50 84.80           C  
@@ -56,13 +55,13 @@ def loadPDB(filename):
         
         if( os.path.exists(pickledName) ):
             with open(pickledName, 'rb') as f:
-                pdb = cPickle.load(f)
+                pdb = pickle.load(f)
             return pdb
         else:
-            print "creating pickle file"
+            print("creating pickle file")
             pdb = loadTextPDB(filename)
             with open(pickledName, 'wb') as f:
-                cPickle.dump(pdb, f, 2)
+                pickle.dump(pdb, f, 2)
             return pdb        
     else:
         return loadTextPDB(filename)

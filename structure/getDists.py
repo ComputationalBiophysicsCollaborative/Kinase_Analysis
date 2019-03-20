@@ -1,15 +1,24 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 from math import sqrt as msqrt
 from scipy import *
 import pdbParse
 import sys, os, glob, errno
 from scipy.spatial.distance import cdist
+import time
 
 code = pdbParse.residueCode
-extracode = {'ABA': 'GLU', 'B3L': 'LEU', 'CAS': 'CYS', 'CIR': 'ARG', 'CME': 'CYS', 'CMT': 'CYS', 'CSD': 'CYS', 'CSO': 'CYS', 'CSS': 'CYS', 'CY0': 'CYS', 'FCL': 'PHE', 'KCX': 'LYS', 'L3O': 'LEU', 'LGY': 'LYS', 'MEA': 'PHE', 'MHO': 'MET', 'MSE': 'MET', 'NMM': 'ARG', 'OCS': 'CYS', 'OCY': 'CYS', 'PFF': 'TYR', 'PTR': 'TYR', 'SCS': 'CYS', 'SEP': 'SER', 'TPO': 'THR', 'TYI': 'TYR'}
-code.update(dict((k, code[v]) for k,v in extracode.iteritems()))
-#note that these extra codes are unreliable, since some PDBS assign the same 
+extracode = {'ABA': 'GLU', 'B3L': 'LEU', 'CAS': 'CYS', 'CIR': 'ARG', 'CME':
+             'CYS', 'CMT': 'CYS', 'CSD': 'CYS', 'CSO': 'CYS', 'CSS': 'CYS',
+             'CY0': 'CYS', 'FCL': 'PHE', 'KCX': 'LYS', 'L3O': 'LEU', 'LGY':
+             'LYS', 'MEA': 'PHE', 'MHO': 'MET', 'MSE': 'MET', 'NMM': 'ARG',
+             'OCS': 'CYS', 'OCY': 'CYS', 'PFF': 'TYR', 'PTR': 'TYR', 'SCS':
+             'CYS', 'SEP': 'SER', 'TPO': 'THR', 'TYI': 'TYR'}
+code.update(dict((k, code[v]) for k,v in extracode.items()))
+code = {k.encode('ascii'): v for k,v in code.items()}
+#note that these extra codes are unreliable, since some PDBS assign the same
 #name to different residues. So correct for that using MODRES below
+
+PDBdir = sys.argv[1]
 
 def mkdir_p(path):
     try:
@@ -19,65 +28,70 @@ def mkdir_p(path):
             pass
         else: raise
 
-mkdir_p('distances')
+mkdir_p('distancesNHA')
 mkdir_p('distancesCA')
 mkdir_p('distancesCB')
 
 def vdist(a,b):
     return sqrt(sum((a-b)**2))
 
-for pdbfn in glob.glob(sys.argv[1] + '/*'):
-#for pdbfn in [sys.argv[1] + '/' + x + '.pdb' for x in ['1IEP', '2GQG']]:
+
+for pdbfn in glob.glob(PDBdir + '/*'):
     pdb = os.path.splitext(os.path.basename(pdbfn))[0]
-    print >>sys.stderr, pdb
+    print(pdb)
     p = pdbParse.loadPDB(pdbfn)
-    chains = list(set(p.chain))
+    if len(p) == 0:
+        print("Empty file? ", pdbfn)
+    chains = [c for c in set(p.chain)]
+
     for chain in chains:
-        if os.path.exists(os.path.join('distances', pdb+'_'+chain+'.npy')):
-            print "Already done {}".format(pdb+'_'+chain)
+        name = pdb+'_'+chain.decode('ascii')
+
+        if os.path.exists(os.path.join('distances', name+'.npy')):
+            print("Already done {}".format(name))
             continue
 
-        c = p[(p.chain == chain)]
-        CA = c[c.atom == ' CA ']
-        CB = c[(c.atom == ' CB ') | ((c.atom == ' CA ') & (c.resName == 'GLY'))] #for CB calculation, count CA as CB for gly
-
-        #remove unknown residues and remove duplicate conformers
-        #Important that this is done in exactly the same way as in 
+        #get atoms, but remove unknown residues and remove duplicate conformers
+        #Important that this is done in exactly the same way as in
         #getPDBseq.py so that "seen" residue indexes match
-        fidsA = CA['resID'] #work with full resID to account for inserts
-        filtA = (CA.resName != 'UNK') & (r_[True, fidsA[1:] != fidsA[:-1]])
+        c = p[(p.chain == chain)]
+        c = c[((c.altLoc == b' ') | (c.altLoc == b'A')) & (c.resName != b'UNK')]
 
-        fidsB = CB['resID'] #work with full resID to account for inserts
-        filtB = (CB.resName != 'UNK') & (r_[True, fidsB[1:] != fidsB[:-1]])
+        CA = c[c.atom == b' CA ']
 
-        resids = CA['resID'][filtA]
-        nres = len(resids)
-        if nres == 0:
-            continue
+        resids = CA.resID
+        L = len(resids)
+        pairs = [(i,j) for i in range(L-1) for j in range(i+1,L)]
 
-        def findfirst(cond):
-            res = argwhere(cond).flatten()
-            return res[0] if len(res) > 0 else None
 
-        def findall(cond):
-            return argwhere(cond).flatten()
+        # compute Nearest-heavy-atom (NHA) distances
+        atoms = c[c.element != b' H']
+        atomids = atoms.resID
+        cc = [atoms.coords[argwhere(atomids == id).ravel()] for id in resids]
+        NHAdist = array([min(cdist(cc[i], cc[j]).ravel()) for i,j in pairs])
 
-        if 1:#not os.path.exists(os.path.join('distances', pdb+'_'+chain+'.npy')):
-            rinds = [findall((c['resID'] == resids[i]) & (c.atom.element != ' H')) for i in range(nres)]
-            residues = [c[i].coords for i in rinds]
-            distances = array([min(cdist(residues[i], residues[j]).flatten()) for i in range(nres-1) for j in range(i+1, nres)])
+        # compute CA distance
+        CAdist = cdist(CA.coords, CA.coords)[triu_indices(L,k=1)]
 
-            rinds = [findfirst((CA['resID'] == resids[i]) & filtA) for i in range(nres)]
-            residues = [CA[i].coords for i in rinds]
-            CAdist = array([vdist(residues[i], residues[j]) for i in range(nres-1) for j in range(i+1, nres)])
-            
-            rinds = [findfirst((CB['resID'] == resids[i]) & filtB) for i in range(nres)]
-            residues = [CB[i].coords if i != None else nan for i in rinds]
-            CBdist = array([vdist(residues[i], residues[j]) for i in range(nres-1) for j in range(i+1, nres)])
+        # compute CB distance.  Count CA as CB for gly
+        CB = c[(c.atom == b' CB ') |
+               ((c.atom == b' CA ') & (c.resName == b'GLY'))]
+        inds = [argwhere(CB.resID == id).ravel() for id in resids]
+        cc = array([CB.coords[ind[0]] if len(ind) > 0 else [nan,nan,nan]
+                    for ind in inds])
+        CBdist = cdist(cc, cc)[triu_indices(L,k=1)]
 
-            assert(len(CAdist) == len(CBdist))
-            assert(len(CAdist) == len(distances))
+        # sanity checks
+        assert(len(CAdist) == len(CBdist))
+        assert(len(CAdist) == len(NHAdist))
+        # sanity check for clashes
+        clashes = [(resids[i], resids[j]) for n,(i,j) in enumerate(pairs)
+                   if abs(i-j) > 4 and NHAdist[n] < 2.0]
+        # 2.0 isdistance at which pymol draws bonds
+        if len(clashes) > 0:
+            clashes = [(x.decode('ascii'),y.decode('ascii')) for x,y in clashes]
+            print('Clashes for pdb {} in residues {}'.format(name, clashes))
 
-            save(os.path.join('distances', pdb+'_'+chain), distances)
-            save(os.path.join('distancesCA', pdb+'_'+chain), CAdist)
-            save(os.path.join('distancesCB', pdb+'_'+chain), CBdist)
+        save(os.path.join('distancesNHA', name), NHAdist)
+        save(os.path.join('distancesCA', name), CAdist)
+        save(os.path.join('distancesCB', name), CBdist)
