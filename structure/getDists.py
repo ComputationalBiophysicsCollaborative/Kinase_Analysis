@@ -19,6 +19,7 @@ code = {k.encode('ascii'): v for k,v in code.items()}
 #name to different residues. So correct for that using MODRES below
 
 PDBdir = sys.argv[1]
+minL = int(sys.argv[2])
 
 def mkdir_p(path):
     try:
@@ -29,6 +30,8 @@ def mkdir_p(path):
         else: raise
 
 mkdir_p('distancesNHA')
+mkdir_p('distancesSCC')
+mkdir_p('distancesSCNHA')
 mkdir_p('distancesCA')
 mkdir_p('distancesCB')
 
@@ -47,7 +50,7 @@ for pdbfn in glob.glob(PDBdir + '/*'):
     for chain in chains:
         name = pdb+'_'+chain.decode('ascii')
 
-        if os.path.exists(os.path.join('distances', name+'.npy')):
+        if os.path.exists(os.path.join('distancesCB', name+'.npy')):
             print("Already done {}".format(name))
             continue
 
@@ -63,12 +66,28 @@ for pdbfn in glob.glob(PDBdir + '/*'):
         L = len(resids)
         pairs = [(i,j) for i in range(L-1) for j in range(i+1,L)]
 
+        if L < minL:
+            print("Skipping {}: too short at L={}".format(name, L))
+            continue
 
         # compute Nearest-heavy-atom (NHA) distances
         atoms = c[c.element != b' H']
         atomids = atoms.resID
         cc = [atoms.coords[argwhere(atomids == id).ravel()] for id in resids]
         NHAdist = array([min(cdist(cc[i], cc[j]).ravel()) for i,j in pairs])
+
+        # compute side-chain Nearest-heavy-atom (SCNHA) distances
+        atoms = c[(c.element != b' H') & (c.atom != b' C  ') &
+                  (c.atom != b' O  ') & (c.atom != b' N  ') &
+                  ((c.atom != b' CA ') | (c.resName == b'GLY'))]
+        atomids = atoms.resID
+        cc = [atoms.coords[argwhere(atomids == id).ravel()] for id in resids]
+        cc = [ci if ci.size != 0 else [[nan,nan,nan]] for ci in cc]
+        SCNHAdist = array([min(cdist(cc[i], cc[j]).ravel()) for i,j in pairs])
+
+        # compute side-chain center (SCC) distances
+        scc = array([mean(ci, axis=0) for ci in cc])
+        SCCdist = cdist(scc, scc)[triu_indices(L,k=1)]
 
         # compute CA distance
         CAdist = cdist(CA.coords, CA.coords)[triu_indices(L,k=1)]
@@ -93,5 +112,7 @@ for pdbfn in glob.glob(PDBdir + '/*'):
             print('Clashes for pdb {} in residues {}'.format(name, clashes))
 
         save(os.path.join('distancesNHA', name), NHAdist)
+        save(os.path.join('distancesSCC', name), SCCdist)
+        save(os.path.join('distancesSCNHA', name), SCNHAdist)
         save(os.path.join('distancesCA', name), CAdist)
         save(os.path.join('distancesCB', name), CBdist)

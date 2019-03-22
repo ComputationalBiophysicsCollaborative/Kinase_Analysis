@@ -1,8 +1,7 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 from scipy import *
 import scipy.io as sio
 import matplotlib
-#matplotlib.use('Agg')
 import pylab
 import matplotlib.patheffects as PathEffects
 import matplotlib.transforms as transforms
@@ -16,37 +15,45 @@ scriptPath = os.path.dirname(os.path.realpath(__file__))
 outpath = sys.argv[1]
 distpath = sys.argv[2]
 
-cutoff = 10
+cutoff = 8
 
 #load map from pdb to aln index
-with open(sys.argv[3]) as f:  #PDBseqIndices
+with open(sys.argv[3]) as f:  #pdbseqIndices
     dat = [l.split() for l in f.readlines()]
     indmaps = dict([(d[0], array([int(x) for x in d[1:]])) for d in dat])
 
-with open(sys.argv[4]) as f: #PDBseqsHHfull_filtergap
+with open(sys.argv[4]) as f: #pdbseqs_full_ID
     fullalnseqs = dict([l.split() for l in f.readlines()])
 
-with open(sys.argv[5]) as f:
+with open(sys.argv[5]) as f: # regions
     dat = [l.split(',') for l in f.readlines()]
     regions = [(n,int(s),int(e)) for n,s,e in dat]
 lobediv = [e for n,s,e in regions if n == 'Hinge'][0]
 
 def fillGroups(positions, L, clr):
-    for k, g in groupby(enumerate(positions), lambda (i,x):i-x):
+    #for k, g in groupby(enumerate(positions), lambda i,x: i-x):
+    for k, g in groupby(enumerate(positions), lambda x: x[0]-x[1]):
         inds = [x[1] for x in g]
         start, end = inds[0], inds[-1]+1
-        pylab.fill([start+0.5, start+0.5, end+0.5, end+0.5], [+0.5,L+0.5,L+0.5,+0.5],color=clr, ec='none', lw=0)
-        pylab.fill([+0.5,L+0.5,L+0.5,+0.5],[start+0.5, start+0.5, end+0.5, end+0.5], color=clr, ec='none', lw=0)
+        pylab.fill([start+0.5, start+0.5, end+0.5, end+0.5],
+                   [+0.5,L+0.5,L+0.5,+0.5],color=clr, ec='none', lw=0)
+        pylab.fill([+0.5,L+0.5,L+0.5,+0.5],
+                   [start+0.5, start+0.5, end+0.5, end+0.5],
+                   color=clr, ec='none', lw=0)
 
 def plotContacts(name):
-    pdbseq2structMap = indmaps[name] #map from pdb seq index to structural index (ie, from seqres index, to resolved residue #)
+    # map from pdb seq index to structural index (ie, from seqres index, to
+    # resolved residue #)
+    pdbseq2structMap = indmaps[name] 
     fullalnseq = fullalnseqs[name] #seq after alignment
     
     aln2fullalnMap = where([c.isupper() or c == '-' for c in fullalnseq])[0]
     pdbseq2fullalnMap = where([c not in ".-" for c in fullalnseq])[0]
     fullaln2pdbseqMap = -ones(len(fullalnseq), dtype=int)
     fullaln2pdbseqMap[pdbseq2fullalnMap] = arange(len(pdbseq2fullalnMap))
-    aln2structMap = [pdbseq2structMap[fullaln2pdbseqMap[i]] if fullaln2pdbseqMap[i] != -1 else -1 for i in aln2fullalnMap]
+    aln2structMap = [pdbseq2structMap[fullaln2pdbseqMap[i]] 
+                     if fullaln2pdbseqMap[i] != -1 else -1
+                     for i in aln2fullalnMap]
 
     pdbseq = [x for x in fullalnseq if x not in ".-"]
     alnseq = [x for x in fullalnseq if x not in "." and not x.islower()]
@@ -54,23 +61,27 @@ def plotContacts(name):
     distances = load(os.path.join(distpath, name + '.npy'))
     L = int(((1+sqrt(1+8*len(distances)))/2) + 0.5) 
 
+    stroke = PathEffects.withStroke(linewidth=3, foreground="w")
+
     #form matrix
     distancesM = zeros((L,L),dtype=float)
     distancesM[triu_indices(L,k=1)] = distances
     distancesM = distancesM + distancesM.T
 
     ########################################
-    #first, plot the raw contact map for the entire sequence 
-    #that is, the contact map size will be equal to the length of the seqres header (minus junk)
-    #shows inserts as red, missing residues as blue, and deletes as dotted lines (or colored lines?)
+    # first, plot the raw contact map for the entire sequence 
+    # that is, the contact map size will be equal to the length of the seqres
+    # header (minus junk) #shows inserts as red, missing residues as blue, and
+    # deletes as dotted lines (or colored lines?)
 
     pylab.figure(figsize=(12,12))
     ax = pylab.axes() 
     trans = transforms.blended_transform_factory(ax.transAxes, ax.transData)
 
     sL = len(pdbseq2structMap)
+    pairs = ((i,j) for i in range(sL-1) for j in range(i+1,sL))
     distmat = zeros((sL,sL))*nan
-    for n,(i,j) in enumerate([(i,j) for i in range(sL-1) for j in range(i+1,sL)]):
+    for n,(i,j) in enumerate(pairs):
         if pdbseq2structMap[i] == -1 or pdbseq2structMap[j] == -1:
             continue
         distmat[i,j] = distancesM[pdbseq2structMap[i], pdbseq2structMap[j]]
@@ -80,7 +91,8 @@ def plotContacts(name):
     
     cim = ones(distmat.shape + (3,))
     cim[contacts] = ones(3)*0.4
-    pylab.imshow(cim, origin='lower', extent=(+0.5,sL+0.5,+0.5,sL+0.5), interpolation='nearest')
+    pylab.imshow(cim, origin='lower', extent=(+0.5,sL+0.5,+0.5,sL+0.5),
+                      interpolation='nearest')
 
     #annotate inserts relative to alignment (red)
     inserts = where([c.islower() for c in pdbseq])[0]
@@ -91,14 +103,17 @@ def plotContacts(name):
     fillGroups(missing, sL, (0.4,0.4,0.7,0.3))
 
     #map from alignment index to *closest* pdb seq index
-    remap = lambda i,s: searchsorted(pdbseq2fullalnMap, aln2fullalnMap[i], side=s)
+    def remap(i,s):
+        return searchsorted(pdbseq2fullalnMap, aln2fullalnMap[i], side=s)
 
     #annotate regions
-    xregions = [(n, remap(s, 'left'), remap(e-1, 'left')+1) for n,s,e in regions]
+    xregions = [(n, remap(s, 'left'), remap(e-1, 'left')+1)
+                for n,s,e in regions]
     annotate(xregions, remap(lobediv, 'left'), sL, pylab.gca(), zorder=1)
 
     #plot lines at deletion points (green)
-    deletepos = searchsorted(pdbseq2fullalnMap, where([x == '-' for x in fullalnseq])[0])
+    deletepos = searchsorted(pdbseq2fullalnMap, where([x == '-' 
+                                                       for x in fullalnseq])[0])
     #for d in set(deletepos):
     #    pylab.axvline(d+0.5, color='g', zorder=9)
     #    pylab.axhline(d+0.5, color='g', zorder=9)
@@ -107,19 +122,24 @@ def plotContacts(name):
     for d, g in groupby(deletepos):
         pylab.axvline(d+0.5, color='g', zorder=9)
         pylab.axhline(d+0.5, color='g', zorder=9)
-        pylab.text(0.005 + altern*0.01, d+0.5, str(len(list(g))), verticalalignment='center', horizontalalignment='right', transform=transY, path_effects=[PathEffects.withStroke(linewidth=3, foreground="w")], color='g', zorder=100)
+        pylab.text(0.005 + altern*0.01, d+0.5, str(len(list(g))),
+                   verticalalignment='center', horizontalalignment='right', 
+                   transform=transY, path_effects=[stroke],
+                   color='g', zorder=100)
         altern = not altern
 
     #plot seqeunce
     altern = 0
     for n,c in enumerate(pdbseq):
-        pylab.text(1.02 + altern*0.014, n+1, c, verticalalignment='center', horizontalalignment='center', transform=transY, zorder=100)
+        pylab.text(1.02 + altern*0.014, n+1, c, verticalalignment='center',
+                   horizontalalignment='center', transform=transY, zorder=100)
         altern = (altern+1)%6
     
     #plot dotted line around alignment region
     start = remap(0, 'left')-0.5
     end = remap(-1, 'right')+1.5
-    pylab.fill([start, start, end, end],[start, end, end, start], fill=False, ls='dashed', zorder=10)
+    pylab.fill([start, start, end, end],[start, end, end, start], fill=False,
+               ls='dashed', zorder=10)
 
     pylab.title(name + ", full PDB sequence ({}A)".format(cutoff))
     pylab.subplots_adjust(bottom=0.05, right=0.90, top=0.95, left=0.05)
@@ -152,7 +172,8 @@ def plotContacts(name):
 
     acim = ones(adistmat.shape + (3,))
     acim[acontacts] = ones(3)*0.4
-    pylab.imshow(acim, origin='lower', extent=(+0.5,aL+0.5,+0.5,aL+0.5), interpolation='nearest')
+    pylab.imshow(acim, origin='lower', extent=(+0.5,aL+0.5,+0.5,aL+0.5),
+                 interpolation='nearest')
 
     #plot unresolved and deleted regions
     unresolved = where([aln2structMap[n] == -1 for n in range(len(alnseq))])[0]
@@ -160,12 +181,13 @@ def plotContacts(name):
     deleted = where([c == '-' for c in alnseq])[0]
     fillGroups(deleted, aL, (0.4,0.7,0.4,0.3))
     with open(os.path.join(outpath, 'unresolvedCounts'), 'at') as f:
-        print >>f, repr((name, list(unresolved)))
+        print(repr((name, list(unresolved))), file=f)
     with open(os.path.join(outpath, 'deleteCounts'), 'at') as f:
-        print >>f, repr((name, list(deleted)))
+        print(repr((name, list(deleted))), file=f)
 
     #plot insertions (lines, red)
-    insertpos = searchsorted(aln2fullalnMap, where([x.islower() for x in fullalnseq])[0])
+    insertpos = searchsorted(aln2fullalnMap, where([x.islower()
+                                                    for x in fullalnseq])[0])
     #for d in set(insertpos):
     #    pylab.axvline(d+0.5, color='r', zorder=9)
     #    pylab.axhline(d+0.5, color='r', zorder=9)
@@ -175,11 +197,14 @@ def plotContacts(name):
     for d, n in insertlist[1:-1]: #first and last are just sequence extension
         pylab.axvline(d+0.5, color='r', zorder=9)
         pylab.axhline(d+0.5, color='r', zorder=9)
-        pylab.text(0.005 + altern*0.01, d+0.5, str(n), verticalalignment='center', horizontalalignment='right', transform=transY, path_effects=[PathEffects.withStroke(linewidth=3, foreground="w")], color='r', zorder=100)
+        pylab.text(0.005 + altern*0.01, d+0.5, str(n),
+                   verticalalignment='center', horizontalalignment='right',
+                   transform=transY, path_effects=[stroke],
+                   color='r', zorder=100)
         altern = not altern
 
     with open(os.path.join(outpath, 'insertCounts'), 'at') as f:
-        print >>f, repr((name, insertlist))
+        print(repr((name, insertlist)), file=f)
 
     #annotate regions
     annotate(regions, lobediv, aL, pylab.gca())
@@ -208,14 +233,10 @@ with open(os.path.join(outpath, 'unresolvedcounts'), 'wt') as f:
     pass
 
 for name in fullalnseqs.keys():
-#for name in ['1IEP_A', '2GQG_A']:
-    #if os.path.exists(os.path.join(outpath, 'adist/{}.npy'.format(name))):
-    #    print name, "Already done"
-    #    continue
     if not os.path.exists(os.path.join(distpath, name + '.npy')):
-        print name, "Skipping: No coords"
+        print(name, "Skipping: No coords")
         continue
-    print name
+    print(name)
 
     adist = plotContacts(name)
     pylab.subplots_adjust(bottom=0.05, right=0.95, top=0.95, left=0.05)

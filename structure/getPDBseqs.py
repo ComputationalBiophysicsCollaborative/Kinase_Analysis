@@ -124,7 +124,7 @@ for pdbfn in glob.glob(sys.argv[1] + '/*'):
 
         #print out residue id map
         with open('pdbseqResinds', 'at') as f:
-            idmap = "|".join(str(resinds.get(i, '  -  ')) for i in range(L))
+            idmap = "|".join(resinds.get(i, b'  -  ').decode('ascii') for i in range(L))
             print(name + "|" + idmap, file=f)
 
         #print out residue index map
