@@ -97,8 +97,21 @@ regions = [
     ]
 
 for name, (s, e), color in regions:
-    sele = 'resi {}-{}'.format(amap[s].decode('ascii').strip(),
-                               amap[e-1].decode('ascii').strip())
+    rs = '-'
+    while rs == '-' and s < e:
+        rs = amap[s].decode('ascii').strip()
+        s += 1
+
+    re = '-'
+    while re == '-' and e > s:
+        re = amap[e-1].decode('ascii').strip()
+        e -= 1
+
+    print(name, s, e)
+    if re == '-':
+        continue
+
+    sele = 'resi {}-{}'.format(rs, re)
     sele = chainsel + " and " + sele
     cmd.show('cartoon', sele)
     cmd.color(color, sele)
