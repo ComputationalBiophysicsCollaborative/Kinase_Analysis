@@ -172,7 +172,7 @@ pylab.savefig(os.path.join(outpath, 'tot_var_normed.png'))
 
 finishfigs()
 
-for cutoff in [5.0, 5.25, 5.5, 6.0, 6.5, 7.0, 8.0, 10.0]:
+for cutoff in [4.25, 4.5, 4.75, 5.0, 5.25, 5.5, 6.0, 6.5, 7.0, 8.0, 10.0]:
     totp = dot(distances < cutoff, weights)/nrm
     
     cutoffdir = os.path.join(outpath, str(cutoff)+'A')
