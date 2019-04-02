@@ -107,15 +107,21 @@ for pdbfn in glob.glob(sys.argv[1] + '/*'):
         #align each chunk in order
         pos = 0
         resinds, alninds = {}, {}
+        misaligned = False
         for rinds, inds, res in zip(chunkrinds, chunkinds, chunkres):
             m = re.search(res, seq[pos:])
             if not m:
-                raise Exception("Could not align {} inside {}, chain {}".format(
+                print("Could not align {} inside {}, chain {}".format(
                                                                res, seq, chain))
+                misaligned = True
+                break
             startpos = pos + m.start()
             resinds.update(dict((startpos + n, i) for n,i in enumerate(rinds)))
             alninds.update(dict((startpos + n, i) for n,i in enumerate(inds)))
             pos += m.end()
+
+        if misaligned:
+            continue
 
         #print out full sequence
         with open('pdbseqs.fa', 'at') as f:

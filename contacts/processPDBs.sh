@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 
+SCRIPTDIR=$(dirname "$0")
+struct_dir=$1
 
-../scripts/alignContacts.py ./alignedPDB ../structure/PDB_ABC/distances/ ../structure/PDB_ABC/pdbseqIndices ../structure/PDB_ABC/pdbseqs_full_ID ../alignment/regionsLong
+for dataset in CA CB NHA SCNHA SCC
+do
+    $SCRIPTDIR/alignContacts.py ./aligned$dataset $struct_dir/distances$dataset/ $struct_dir/pdbseqIndices $struct_dir/pdbseqs_full_ID $SCRIPTDIR/regionsLong &
+done
 
-(
-    cd alignedPDB
-    mkdir combined
-    ls aln/* | parallel convert {} pdb/{/} +append combined/{/}
-)
+wait
 
-#./DFGinout_Thresh.py ../SeqClasses/inList ../SeqClasses/outList 70 30 8 ../structure/weights_m1_ID ./aligned ./8A_70-30
+#(
+#    cd alignedPDB
+#    mkdir combined
+#    ls aln/* | parallel convert {} pdb/{/} +append combined/{/}
+#)
