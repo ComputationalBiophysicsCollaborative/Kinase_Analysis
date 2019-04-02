@@ -19,6 +19,8 @@ awk '{gsub(/[a-z.]/,"",$2); print }' pdbseqs_full_ID >pdbseqs_ID
 cut -d ' ' -f 1 pdbseqs_ID >IDs
 cut -d ' ' -f 2 pdbseqs_ID >pdbseqs
 
+$SCRIPTDIR/alnResinds.py pdbseqResinds pdbseqs_full_ID >alnMap
+
 #now taken care of in pdb_counts
 echo "" >Neffs
 for weight in none unique m1 0.1 0.4

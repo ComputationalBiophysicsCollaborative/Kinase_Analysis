@@ -17,7 +17,7 @@ colors['cyan']  = [0.5,0.5,1.0]
 interactions = np.load('wFB_kinase.npy')
 L = int(((1+np.sqrt(1+8*len(interactions)))//2) + 0.5)
 
-with open('aln2resid_map', 'rb') as f:
+with open('../structure/03-21-2019/alnMap', 'rb') as f:
     lines = [l.strip(b'\n').split(b'|') for l in f]
     m = dict([(l[0].decode('ascii'), l[1:]) for l in lines])
 
